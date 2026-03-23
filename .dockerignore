@@ -1,0 +1,9 @@
+.git
+.codex
+.Dockerfile.swp
+gtasks-mcp
+bin/
+dist/
+*.exe
+*.out
+*.test

@@ -34,10 +34,12 @@ The server enables AI agents (Claude, ChatGPT, etc.) to:
 
 * Language: Go
 * Use Go standard library wherever possible
-* Use official Google SDK:
+* Use official Google SDK modules as needed for Google Tasks integration:
 
   * google.golang.org/api/tasks/v1
-* Allowed external dependency:
+  * google.golang.org/api/option
+  * other official `google.golang.org/api/...` support modules when required by the SDK
+* Allowed external dependency for OAuth flow:
 
   * golang.org/x/oauth2
 
@@ -116,14 +118,52 @@ The server enables AI agents (Claude, ChatGPT, etc.) to:
 
 * GET /events
 
-### JSON-RPC Request Format
+### MCP JSON-RPC Methods
 
+The server must implement standard MCP JSON-RPC methods rather than
+inventing one JSON-RPC method per tool.
+
+Required methods:
+
+* `initialize`
+* `tools/list`
+* `tools/call`
+* `resources/list`
+* `resources/read`
+
+Example initialize request:
+
+```json
 {
-"jsonrpc": "2.0",
-"id": "string|number",
-"method": "tools.<name>",
-"params": {}
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "example-client",
+      "version": "1.0.0"
+    }
+  }
 }
+```
+
+Example tool call request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "search",
+    "arguments": {
+      "query": "inbox"
+    }
+  }
+}
+```
 
 ---
 
@@ -177,9 +217,14 @@ Input:
 
 Input:
 {
-"taskListId": "string",
-"id": "string"
+"id": "string",
+"uri": "string"
 }
+
+Behavior:
+
+* Deletes from the configured task list only
+* Does not accept `taskListId` because the server is already scoped to one configured list
 
 ---
 
@@ -187,8 +232,12 @@ Input:
 
 Input:
 {
-"taskListId": "string"
 }
+
+Behavior:
+
+* Clears completed tasks from the configured task list only
+* Does not accept `taskListId` because the server is already scoped to one configured list
 
 ---
 
@@ -301,8 +350,6 @@ All errors MUST strictly follow JSON-RPC 2.0 specification.
 auth/
 mcp/
 tasks/
-tools/
-resources/
 logging/
 
 ---
@@ -345,4 +392,3 @@ logging/
 * All tools functional
 * JSON-RPC compliant
 * Dockerized
-

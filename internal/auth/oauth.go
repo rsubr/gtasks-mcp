@@ -9,11 +9,14 @@ import (
 	"net/http"
 	"os"
 
+	"gtasks-mcp/internal/logging"
+
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
 func MustGetClient(tokenFile string) *http.Client {
+	logging.Info("loading oauth credentials", "credentials_file", "gcp-oauth.keys.json", "token_file", tokenFile)
 	b, err := os.ReadFile("gcp-oauth.keys.json")
 	if err != nil { log.Fatal(err) }
 
@@ -22,14 +25,18 @@ func MustGetClient(tokenFile string) *http.Client {
 
 	tok, err := tokenFromFile(tokenFile)
 	if err != nil {
+		logging.Warn("oauth token file unavailable, starting interactive flow", "token_file", tokenFile, "error", err)
 		tok = getTokenFromWeb(config)
 		saveToken(tokenFile, tok)
+	} else {
+		logging.Info("loaded oauth token from file", "token_file", tokenFile)
 	}
 	return config.Client(context.Background(), tok)
 }
 
 func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	logging.Info("awaiting oauth authorization code from stdin")
 	fmt.Println("Open URL:", authURL)
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -52,6 +59,7 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 }
 
 func saveToken(path string, token *oauth2.Token) {
+	logging.Info("saving oauth token", "token_file", path)
 	f, _ := os.Create(path)
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)

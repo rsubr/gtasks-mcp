@@ -1,6 +1,6 @@
 module gtasks-mcp
 
-go 1.22
+go 1.26.1
 
 require (
 	golang.org/x/oauth2 v0.17.0

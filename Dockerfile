@@ -1,8 +1,17 @@
-FROM golang:1.22 AS builder
-WORKDIR /app
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app ./cmd/server
+FROM golang:1.26.1 AS builder
 
-FROM gcr.io/distroless/static:nonroot
-COPY --from=builder /app/app /app
-ENTRYPOINT ["/app"]
+WORKDIR /src
+
+COPY . .
+RUN go mod download
+RUN go build -ldflags="-s -w" -o /out/gtasks-mcp ./cmd/server
+
+FROM gcr.io/distroless/static-debian13:nonroot
+
+WORKDIR /auth
+COPY --from=builder /out/gtasks-mcp /usr/local/bin/gtasks-mcp
+
+VOLUME ["/auth"]
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/gtasks-mcp"]
