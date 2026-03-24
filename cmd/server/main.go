@@ -13,12 +13,27 @@ import (
 )
 
 func main() {
+	credentialsFile := flag.String("credentials-file", "", "OAuth client credentials JSON file")
 	tokenFile := flag.String("token-file", "token.json", "OAuth token file")
 	tasklist := flag.String("tasklist", "", "Task list name")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error")
 	listenAddr := flag.String("listen-addr", "", "Server listen address, for example 0.0.0.0:8080")
 	portFlag := flag.String("port", "", "Server port")
 	flag.Parse()
+
+	resolvedCredentialsFile := *credentialsFile
+	if resolvedCredentialsFile == "" {
+		resolvedCredentialsFile = os.Getenv("GOOGLE_OAUTH_CREDENTIALS_FILE")
+	}
+	if resolvedPath, err := auth.ResolveCredentialsFile(resolvedCredentialsFile); err != nil {
+		logging.Init("info")
+		logging.Warn("oauth credentials file unavailable at startup", "error", err)
+		if resolvedCredentialsFile == "" {
+			resolvedCredentialsFile = auth.DefaultCredentialsFilename
+		}
+	} else {
+		resolvedCredentialsFile = resolvedPath
+	}
 
 	resolvedTaskList := *tasklist
 	if resolvedTaskList == "" {
@@ -37,12 +52,19 @@ func main() {
 	}
 
 	logging.Init(resolvedLogLevel)
-	logging.Info("resolved startup configuration", "task_list", resolvedTaskList, "log_level", resolvedLogLevel, "token_file", *tokenFile)
+	logging.Info("resolved startup configuration", "task_list", resolvedTaskList, "log_level", resolvedLogLevel, "credentials_file", resolvedCredentialsFile, "token_file", *tokenFile)
 
-	client := auth.MustGetClient(*tokenFile)
-	svc, err := tasks.New(client, resolvedTaskList)
+	var svc *tasks.Service
+	client, err := auth.GetClient(resolvedCredentialsFile, *tokenFile)
 	if err != nil {
-		log.Fatal(err)
+		logging.Warn("starting with unavailable google tasks backend", "error", err)
+		svc = tasks.NewUnavailable(resolvedTaskList, err)
+	} else {
+		svc, err = tasks.New(client, resolvedTaskList)
+		if err != nil {
+			logging.Warn("starting with unavailable google tasks backend", "error", err)
+			svc = tasks.NewUnavailable(resolvedTaskList, err)
+		}
 	}
 	server := mcp.NewServer(svc)
 

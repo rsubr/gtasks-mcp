@@ -1,1 +1,12 @@
-gtasks-mcp
+dist/
+
+# Local auth material
+token.json
+gcp-oauth.keys.json
+auth/
+
+# Editor and OS noise
+*.swp
+*.swo
+*~
+.DS_Store
