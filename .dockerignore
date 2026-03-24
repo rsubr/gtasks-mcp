@@ -1,0 +1,6 @@
+.git
+.codex
+*.swp
+*.exe
+*.out
+*.test
