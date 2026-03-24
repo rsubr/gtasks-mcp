@@ -140,6 +140,77 @@ Example using environment variables:
 GOOGLE_OAUTH_CREDENTIALS_FILE="/auth/gcp-oauth.keys.json" TASKLIST_NAME="My Tasks" LOG_LEVEL=debug PORT=8080 ./gtasks-mcp
 ```
 
+## Configure In Clients
+
+If you host the server remotely, point your MCP client at the `/mcp` endpoint. For the examples below, the hosted endpoint is:
+
+```text
+https://gtasks-mcp.rsubr.in/mcp
+```
+
+### Claude Code
+
+Add the server from the CLI:
+
+```bash
+claude mcp add --transport http gtasks https://gtasks-mcp.rsubr.in/mcp
+```
+
+Or add it as JSON configuration:
+
+```json
+{
+  "mcpServers": {
+    "gtasks": {
+      "type": "http",
+      "url": "https://gtasks-mcp.rsubr.in/mcp"
+    }
+  }
+}
+```
+
+### Codex
+
+Add the server from the CLI:
+
+```bash
+codex mcp add gtasks --url https://gtasks-mcp.rsubr.in/mcp
+```
+
+Or add it directly to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.gtasks]
+url = "https://gtasks-mcp.rsubr.in/mcp"
+```
+
+### Gemini CLI
+
+Add the server from the CLI:
+
+```bash
+gemini mcp add --transport http gtasks https://gtasks-mcp.rsubr.in/mcp
+```
+
+Or add it to `~/.gemini/settings.json` or `.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "gtasks": {
+      "httpUrl": "https://gtasks-mcp.rsubr.in/mcp",
+      "timeout": 30000
+    }
+  }
+}
+```
+
+After configuring the server, verify it from the client:
+
+- Claude Code: `claude mcp list`
+- Codex: `codex mcp list`
+- Gemini CLI: `gemini mcp list`
+
 ## Example MCP Usage
 
 Once the server is running, MCP clients should connect to the `/mcp` endpoint.
