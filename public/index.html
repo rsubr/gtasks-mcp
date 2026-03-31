@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gtasks-mcp &mdash; Google Tasks MCP Server</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f9f9f9;
+      color: #222;
+      line-height: 1.6;
+    }
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+    header h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { margin-top: 0.4rem; color: #555; font-size: 1rem; }
+    main {
+      max-width: 720px;
+      margin: 3rem auto;
+      padding: 0 1.5rem;
+    }
+    section { margin-bottom: 2.5rem; }
+    h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.75rem; color: #111; }
+    p, li { color: #444; margin-bottom: 0.5rem; }
+    ul { padding-left: 1.4rem; }
+    .badge {
+      display: inline-block;
+      background: #e8f4ea;
+      color: #2d6a4f;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      border-top: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    footer a { color: #555; }
+    a { color: #1a73e8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>gtasks-mcp</h1>
+  <p>A private Model Context Protocol (MCP) server for Google Tasks</p>
+</header>
+
+<main>
+
+  <section>
+    <span class="badge">Private Use Only</span>
+    <h2>About</h2>
+    <p>
+      <strong>gtasks-mcp</strong> is a self-hosted MCP server that connects AI assistants
+      (such as Claude) to a personal Google Tasks account. It allows an authorised user to
+      read, create, update, and delete tasks through natural-language interactions with an
+      AI assistant.
+    </p>
+    <p>
+      This application is privately operated and is not available to the general public.
+      Access is restricted to authorised Google accounts.
+    </p>
+  </section>
+
+  <section>
+    <h2>What This App Does</h2>
+    <ul>
+      <li>Reads your Google Tasks lists and individual tasks</li>
+      <li>Creates new tasks and updates existing ones</li>
+      <li>Marks tasks as complete or deletes them</li>
+      <li>Exposes this functionality to an AI assistant via the MCP protocol</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Google API Scope Used</h2>
+    <p>
+      This application requests the following OAuth 2.0 scope from Google:
+    </p>
+    <ul>
+      <li>
+        <code>https://www.googleapis.com/auth/tasks</code> &mdash;
+        Read and write access to Google Tasks. This is the minimum scope required
+        to manage tasks on your behalf.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Data &amp; Privacy</h2>
+    <p>
+      No personal data is transmitted to or stored on any third-party server.
+      OAuth credentials are stored locally on the machine running this server and
+      are used solely to authenticate requests to the Google Tasks API on your behalf.
+    </p>
+    <p>
+      Please review our <a href="/privacy-policy.html">Privacy Policy</a> for full details.
+    </p>
+  </section>
+
+  <section>
+    <h2>Contact</h2>
+    <p>
+      For enquiries about this application, please use the contact details in the
+      <a href="/privacy-policy.html">Privacy Policy</a>.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    &copy; 2025 rsubr.in &mdash;
+    <a href="/privacy-policy.html">Privacy Policy</a>
+  </p>
+  <p style="margin-top:0.4rem;">
+    This application is not affiliated with or endorsed by Google LLC.
+  </p>
+</footer>
+
+</body>
+</html>

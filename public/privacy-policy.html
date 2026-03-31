@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy &mdash; gtasks-mcp</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f9f9f9;
+      color: #222;
+      line-height: 1.7;
+    }
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+    header h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { margin-top: 0.4rem; color: #555; font-size: 0.95rem; }
+    main {
+      max-width: 720px;
+      margin: 3rem auto;
+      padding: 0 1.5rem;
+    }
+    section { margin-bottom: 2.5rem; }
+    h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid #e8e8e8;
+      color: #111;
+    }
+    p, li { color: #444; margin-bottom: 0.6rem; }
+    ul { padding-left: 1.4rem; margin-bottom: 0.6rem; }
+    .effective-date {
+      background: #fff8e1;
+      border-left: 4px solid #f9a825;
+      padding: 0.75rem 1rem;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+      color: #555;
+    }
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      border-top: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    a { color: #1a73e8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    strong { color: #222; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Privacy Policy</h1>
+  <p>gtasks-mcp &mdash; Google Tasks MCP Server</p>
+</header>
+
+<main>
+
+  <div class="effective-date">
+    <strong>Effective date:</strong> 1 April 2025 &nbsp;&bull;&nbsp;
+    <strong>Last updated:</strong> 1 April 2025
+  </div>
+
+  <section>
+    <h2>1. Overview</h2>
+    <p>
+      This Privacy Policy describes how <strong>gtasks-mcp</strong> ("the Application",
+      "we", "our") collects, uses, and protects information when you authorise it to
+      access your Google account data. The Application is privately operated and is
+      not available to the general public.
+    </p>
+    <p>
+      By using this Application, you agree to the practices described in this policy.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. Information We Access</h2>
+    <p>
+      The Application requests access to the following Google user data via the
+      Google Tasks API:
+    </p>
+    <ul>
+      <li>
+        <strong>Google Tasks data</strong> &mdash; including task lists, task titles,
+        descriptions, due dates, completion status, and task order. This is accessed
+        using the OAuth 2.0 scope
+        <code>https://www.googleapis.com/auth/tasks</code>.
+      </li>
+    </ul>
+    <p>
+      No other Google account data (such as email, contacts, calendar, or Drive) is
+      accessed or requested.
+    </p>
+  </section>
+
+  <section>
+    <h2>3. How We Use Your Data</h2>
+    <p>
+      Data accessed through the Google Tasks API is used exclusively to:
+    </p>
+    <ul>
+      <li>Display your task lists and tasks to you through the AI assistant interface</li>
+      <li>Create, update, complete, and delete tasks on your behalf, as directed by you</li>
+      <li>Perform task management operations requested by you in real time</li>
+    </ul>
+    <p>
+      Your data is <strong>not</strong> used for advertising, analytics, profiling,
+      training machine learning models, or any purpose other than the task management
+      functions described above.
+    </p>
+  </section>
+
+  <section>
+    <h2>4. Data Storage and Retention</h2>
+    <p>
+      The Application stores the following data locally on the machine where it is
+      self-hosted:
+    </p>
+    <ul>
+      <li>
+        <strong>OAuth tokens</strong> &mdash; an access token and refresh token issued
+        by Google are stored in a local file (<code>token.json</code>) on the host
+        machine. These tokens are used solely to authenticate API requests to Google
+        on your behalf.
+      </li>
+    </ul>
+    <p>
+      No Google Tasks content (task titles, descriptions, due dates, etc.) is persisted
+      to disk by the Application. Task data is retrieved from Google's servers on demand
+      and exists only transiently in memory during request processing.
+    </p>
+    <p>
+      OAuth tokens are retained until you revoke access via your
+      <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">
+        Google Account permissions page
+      </a>
+      or until the token file is manually deleted from the host machine.
+    </p>
+  </section>
+
+  <section>
+    <h2>5. Data Sharing and Disclosure</h2>
+    <p>
+      We do <strong>not</strong> sell, rent, trade, or share your Google user data
+      with any third party, including:
+    </p>
+    <ul>
+      <li>Advertisers or analytics providers</li>
+      <li>Data brokers</li>
+      <li>Other users or organisations</li>
+      <li>AI model training pipelines</li>
+    </ul>
+    <p>
+      Your data is never transmitted to any server other than Google's own API endpoints
+      (<code>tasks.googleapis.com</code>). The Application acts as a local proxy between
+      your AI assistant and the Google Tasks API; all network communication occurs
+      directly between the host machine and Google.
+    </p>
+  </section>
+
+  <section>
+    <h2>6. Google API Services User Data Policy</h2>
+    <p>
+      The Application's use and transfer of information received from Google APIs adheres
+      to the
+      <a href="https://developers.google.com/terms/api-services-user-data-policy"
+         target="_blank" rel="noopener">
+        Google API Services User Data Policy
+      </a>,
+      including the Limited Use requirements. Specifically:
+    </p>
+    <ul>
+      <li>
+        Access to Google user data is limited to providing and improving the task
+        management features described in this policy.
+      </li>
+      <li>
+        Google user data is not used to develop, improve, or train generalised AI or
+        machine learning models.
+      </li>
+      <li>
+        Google user data is not transferred to third parties except as necessary to
+        provide the Application's functionality, and only with your explicit authorisation.
+      </li>
+      <li>
+        Humans do not read your Google user data unless you explicitly share it or
+        we are required to do so by law.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>7. Security</h2>
+    <p>
+      OAuth tokens are stored locally on the self-hosted machine and are never
+      transmitted to any server operated by the Application's developer.
+      Access to the host machine is the responsibility of the operator.
+      We recommend restricting file system permissions on <code>token.json</code>
+      to the user account running the server process.
+    </p>
+  </section>
+
+  <section>
+    <h2>8. Your Rights and Choices</h2>
+    <p>You may at any time:</p>
+    <ul>
+      <li>
+        <strong>Revoke access</strong> &mdash; remove the Application's access to your
+        Google account at
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">
+          myaccount.google.com/permissions
+        </a>.
+        Revoking access immediately invalidates all stored tokens.
+      </li>
+      <li>
+        <strong>Delete stored tokens</strong> &mdash; delete the <code>token.json</code>
+        file from the host machine to remove all locally stored credentials.
+      </li>
+      <li>
+        <strong>Request information</strong> &mdash; contact us at the address below to
+        request details about what data the Application has accessed on your behalf.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>9. Changes to This Policy</h2>
+    <p>
+      We may update this Privacy Policy from time to time. Material changes will be
+      reflected by an updated "Last updated" date at the top of this page.
+      Continued use of the Application after changes are posted constitutes your
+      acceptance of the revised policy.
+    </p>
+  </section>
+
+  <section>
+    <h2>10. Contact</h2>
+    <p>
+      If you have any questions or concerns about this Privacy Policy or the
+      Application's data practices, please contact the operator via the domain
+      <strong>rsubr.in</strong>.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    &copy; 2025 rsubr.in &mdash;
+    <a href="/index.html">Home</a>
+  </p>
+  <p style="margin-top:0.4rem;">
+    This application is not affiliated with or endorsed by Google LLC.
+  </p>
+</footer>
+
+</body>
+</html>
