@@ -70,7 +70,49 @@ To prepare Google API access:
 2. Create an OAuth client credential JSON file.
 3. Save that file as `gcp-oauth.keys.json`.
 4. Place it either at `/auth/gcp-oauth.keys.json` for container use or `./gcp-oauth.keys.json` for local repo-root use, or pass an explicit path.
-5. Start the server and complete the interactive OAuth flow when prompted.
+5. Generate `token.json` using the steps below.
+6. Start the server normally — it will use the saved token on all subsequent runs.
+
+### Generating token.json for the first time
+
+The OAuth flow requires interactive stdin, so `token.json` must be generated before running the server as a background service or daemon.
+
+**Prerequisites:** `gcp-oauth.keys.json` must already exist in `./auth/`.
+
+Run the container interactively:
+
+```bash
+docker run -it --rm \
+  -v ./auth:/auth \
+  ghcr.io/rsubr/gtasks-mcp:latest
+```
+
+Or with docker compose:
+
+```bash
+docker compose run --rm gtasks-mcp
+```
+
+The server will print an authorization URL:
+
+```
+Open URL: https://accounts.google.com/o/oauth2/auth?...
+Paste the full redirect URL or just the authorization code:
+```
+
+1. Open the URL in your browser and sign in with your Google account.
+2. After approving access, Google redirects to a `localhost` URL that will fail to load — that is expected.
+3. Copy the **full URL** from your browser's address bar and paste it into the terminal, then press Enter.
+
+The server exchanges the code, saves `token.json` to `./auth/`, and starts normally. Press `Ctrl+C` to stop it.
+
+Verify the token was saved:
+
+```bash
+ls -la ./auth/token.json
+```
+
+From this point on, `docker compose up` will find the token and skip the interactive flow.
 
 ## Configuration
 
