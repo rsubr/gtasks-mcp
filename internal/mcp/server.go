@@ -72,59 +72,28 @@ func NewServer(tasks *tasks.Service) *Server {
 func (s *Server) Start(addr string) error {
 	logging.Info("starting http server", "listen_addr", addr)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/rpc", s.handleRPC)
-	mux.HandleFunc("/events", s.handleSSE)
+	mux.HandleFunc("/mcp", s.handleMCP)
 	mux.HandleFunc("/manifest", s.handleManifest)
 	return http.ListenAndServe(addr, mux)
 }
 
-func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
-	logging.Debug("sse client connected", "remote_addr", r.RemoteAddr)
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
+func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
+	logging.Debug("received mcp request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.Path)
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		logging.Error("sse streaming unsupported", "remote_addr", r.RemoteAddr)
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	ch := make(chan []byte, 8)
-	clients.Lock()
-	clients.m[ch] = true
-	clients.Unlock()
-	defer func() {
-		clients.Lock()
-		delete(clients.m, ch)
-		clients.Unlock()
-		logging.Debug("sse client disconnected", "remote_addr", r.RemoteAddr)
-	}()
-
-	ctx := r.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg := <-ch:
-			logging.Debug("sending sse event", "remote_addr", r.RemoteAddr)
-			_, _ = w.Write([]byte("event: message\n"))
-			_, _ = w.Write([]byte("data: "))
-			_, _ = w.Write(msg)
-			_, _ = w.Write([]byte("\n\n"))
-			flusher.Flush()
-		}
+	switch r.Method {
+	case http.MethodPost:
+		s.handleMCPPost(w, r)
+	case http.MethodGet:
+		s.handleMCPStream(w, r)
+	case http.MethodDelete:
+		s.handleMCPDelete(w, r)
+	default:
+		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost, http.MethodDelete}, ", "))
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
-	logging.Debug("received rpc request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.Path)
-	if r.Method != http.MethodPost {
-		s.writeError(w, nil, -32600, "invalid request", map[string]any{"details": "POST required", "source": "internal"})
-		return
-	}
-
+func (s *Server) handleMCPPost(w http.ResponseWriter, r *http.Request) {
 	requests, isBatch, err := decodeRequests(r)
 	if err != nil {
 		s.writeError(w, nil, -32700, "parse error", map[string]any{"details": "malformed JSON request body", "source": "internal"})
@@ -135,8 +104,23 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isBatch {
+		for _, req := range requests {
+			if req != nil && req.Method == "initialize" {
+				s.writeError(w, nil, -32600, "invalid request", map[string]any{"details": "initialize must not be batched", "source": "internal"})
+				return
+			}
+		}
+	}
+
+	sessionID, session, ok := s.requireSession(w, r, !isInitializeRequestSet(requests))
+	if !ok {
+		return
+	}
+
 	if !isBatch {
-		resp := s.dispatchRequest(requests[0])
+		resp, headers := s.dispatchRequest(requests[0], sessionID, session)
+		applyHeaders(w.Header(), headers)
 		if resp == nil {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -147,7 +131,8 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]Response, 0, len(requests))
 	for _, req := range requests {
-		if resp := s.dispatchRequest(req); resp != nil {
+		resp, _ := s.dispatchRequest(req, sessionID, session)
+		if resp != nil {
 			responses = append(responses, *resp)
 		}
 	}
@@ -157,6 +142,106 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSONValue(w, responses)
+}
+
+func (s *Server) handleMCPStream(w http.ResponseWriter, r *http.Request) {
+	sessionID, session, ok := s.requireSession(w, r, true)
+	if !ok {
+		return
+	}
+
+	logging.Debug("sse client connected", "remote_addr", r.RemoteAddr, "session_id", sessionID)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("MCP-Session-Id", sessionID)
+	w.Header().Set("MCP-Protocol-Version", session.ProtocolVersion)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		logging.Error("sse streaming unsupported", "remote_addr", r.RemoteAddr)
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	ch := make(chan []byte, 8)
+	if !addSessionClient(sessionID, ch) {
+		http.Error(w, "unknown mcp session", http.StatusNotFound)
+		return
+	}
+	defer func() {
+		removeSessionClient(sessionID, ch)
+		logging.Debug("sse client disconnected", "remote_addr", r.RemoteAddr, "session_id", sessionID)
+	}()
+
+	flusher.Flush()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			logging.Debug("sending sse event", "remote_addr", r.RemoteAddr, "session_id", sessionID)
+			_, _ = w.Write([]byte("event: message\n"))
+			_, _ = w.Write([]byte("data: "))
+			_, _ = w.Write(msg)
+			_, _ = w.Write([]byte("\n\n"))
+			flusher.Flush()
+		}
+	}
+}
+
+func (s *Server) handleMCPDelete(w http.ResponseWriter, r *http.Request) {
+	sessionID := strings.TrimSpace(r.Header.Get("MCP-Session-Id"))
+	if sessionID == "" {
+		http.Error(w, "missing MCP-Session-Id header", http.StatusBadRequest)
+		return
+	}
+	if !deleteSession(sessionID) {
+		http.Error(w, "unknown mcp session", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) requireSession(w http.ResponseWriter, r *http.Request, required bool) (string, *sessionState, bool) {
+	sessionID := strings.TrimSpace(r.Header.Get("MCP-Session-Id"))
+	if sessionID == "" {
+		if required {
+			http.Error(w, "missing MCP-Session-Id header", http.StatusBadRequest)
+		}
+		return "", nil, !required
+	}
+
+	session, ok := getSession(sessionID)
+	if !ok {
+		http.Error(w, "unknown mcp session", http.StatusNotFound)
+		return "", nil, false
+	}
+
+	protocolHeader := strings.TrimSpace(r.Header.Get("MCP-Protocol-Version"))
+	if protocolHeader != "" && protocolHeader != session.ProtocolVersion {
+		http.Error(w, "unsupported MCP-Protocol-Version header", http.StatusBadRequest)
+		return "", nil, false
+	}
+
+	return sessionID, session, true
+}
+
+func isInitializeRequestSet(requests []*Request) bool {
+	return len(requests) == 1 && requests[0] != nil && requests[0].Method == "initialize"
+}
+
+func applyHeaders(dst, src http.Header) {
+	for key, values := range src {
+		for _, value := range values {
+			dst.Add(key, value)
+		}
+	}
 }
 
 func decodeRequests(r *http.Request) ([]*Request, bool, error) {
@@ -213,21 +298,21 @@ func decodeJSONStrict(data []byte, target any) error {
 	return nil
 }
 
-func (s *Server) dispatchRequest(req *Request) *Response {
+func (s *Server) dispatchRequest(req *Request, sessionID string, session *sessionState) (*Response, http.Header) {
 	if req == nil {
 		resp := newErrorResponse(nil, -32600, "invalid request", map[string]any{"details": "request object is invalid", "source": "internal"})
-		return &resp
+		return &resp, make(http.Header)
 	}
 
 	if err := validateRequest(req); err != nil {
 		resp := newErrorResponse(req.ID, -32600, "invalid request", map[string]any{"details": err.Error(), "source": "internal"})
-		return &resp
+		return &resp, make(http.Header)
 	}
 
 	logging.Info("dispatching rpc method", "rpc_method", req.Method, "request_id", rawIDForLog(req.ID))
 
 	if strings.HasPrefix(req.Method, "notifications/") {
-		return nil
+		return nil, make(http.Header)
 	}
 
 	recorder := newRPCResponseRecorder()
@@ -239,7 +324,7 @@ func (s *Server) dispatchRequest(req *Request) *Response {
 	case "tools/list":
 		s.writeResult(recorder, req.ID, map[string]any{"tools": ToolSchemas()})
 	case "tools/call":
-		s.handleToolCall(recorder, req)
+		s.handleToolCall(recorder, req, sessionID)
 	case "resources/list":
 		s.handleResourcesList(recorder, req)
 	case "resources/read":
@@ -251,9 +336,9 @@ func (s *Server) dispatchRequest(req *Request) *Response {
 	resp, err := recorder.response()
 	if err != nil {
 		fallback := newErrorResponse(req.ID, -32000, "internal server error", map[string]any{"details": err.Error(), "source": "internal"})
-		return &fallback
+		return &fallback, recorder.Header().Clone()
 	}
-	return resp
+	return resp, recorder.Header().Clone()
 }
 
 func validateRequest(req *Request) error {
@@ -339,6 +424,15 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *Request) {
 		return
 	}
 
+	session, err := createSession(protocolVersion)
+	if err != nil {
+		s.writeError(w, req.ID, -32000, "internal server error", map[string]any{"details": err.Error(), "source": "internal"})
+		return
+	}
+
+	w.Header().Set("MCP-Session-Id", session.ID)
+	w.Header().Set("MCP-Protocol-Version", session.ProtocolVersion)
+
 	logging.Info("client initialized session", "client_name", params.ClientInfo.Name, "client_version", params.ClientInfo.Version, "client_protocol", params.ProtocolVersion)
 	s.writeResult(w, req.ID, map[string]any{
 		"protocolVersion": protocolVersion,
@@ -354,7 +448,7 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *Request) {
 	})
 }
 
-func (s *Server) handleToolCall(w http.ResponseWriter, req *Request) {
+func (s *Server) handleToolCall(w http.ResponseWriter, req *Request, sessionID string) {
 	var params toolCallParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		s.writeError(w, req.ID, -32602, "invalid params", map[string]any{"details": "tools/call params are invalid", "source": "internal"})
@@ -446,8 +540,8 @@ func (s *Server) handleToolCall(w http.ResponseWriter, req *Request) {
 			s.writeResult(w, req.ID, toolErrorResult("failed to create task", err))
 			return
 		}
-		broadcastResourcesListChanged()
-		broadcastResourceUpdated(res.URI)
+		broadcastResourcesListChanged(sessionID)
+		broadcastResourceUpdated(sessionID, res.URI)
 		s.writeResult(w, req.ID, toolSuccessResult("Task created.", map[string]any{"task": res}))
 	case "update":
 		var input struct {
@@ -480,8 +574,8 @@ func (s *Server) handleToolCall(w http.ResponseWriter, req *Request) {
 			s.writeResult(w, req.ID, toolErrorResult("failed to update task", err))
 			return
 		}
-		broadcastResourcesListChanged()
-		broadcastResourceUpdated(res.URI)
+		broadcastResourcesListChanged(sessionID)
+		broadcastResourceUpdated(sessionID, res.URI)
 		s.writeResult(w, req.ID, toolSuccessResult("Task updated.", map[string]any{"task": res}))
 	case "delete":
 		var input struct {
@@ -503,14 +597,14 @@ func (s *Server) handleToolCall(w http.ResponseWriter, req *Request) {
 			s.writeResult(w, req.ID, toolErrorResult("failed to delete task", err))
 			return
 		}
-		broadcastResourcesListChanged()
+		broadcastResourcesListChanged(sessionID)
 		s.writeResult(w, req.ID, toolSuccessResult("Task deleted.", map[string]any{"id": taskID, "uri": tasks.ResourceURI(taskID)}))
 	case "clear":
 		if err := s.tasks.Clear(); err != nil {
 			s.writeResult(w, req.ID, toolErrorResult("failed to clear completed tasks", err))
 			return
 		}
-		broadcastResourcesListChanged()
+		broadcastResourcesListChanged(sessionID)
 		s.writeResult(w, req.ID, toolSuccessResult("Completed tasks cleared.", map[string]any{"taskListId": s.tasks.TaskListID()}))
 	default:
 		s.writeError(w, req.ID, -32601, "method not found", map[string]any{"details": fmt.Sprintf("unknown tool %q", params.Name), "source": "internal"})
@@ -589,13 +683,24 @@ func resolveTaskID(id, uri string) (string, error) {
 }
 
 func toolSuccessResult(message string, payload map[string]any) callToolResult {
-	return callToolResult{
-		Content: []map[string]any{
-			{
-				"type": "text",
-				"text": message,
-			},
+	content := []map[string]any{
+		{
+			"type": "text",
+			"text": message,
 		},
+	}
+
+	if len(payload) > 0 {
+		if b, err := json.Marshal(payload); err == nil {
+			content = append(content, map[string]any{
+				"type": "text",
+				"text": string(b),
+			})
+		}
+	}
+
+	return callToolResult{
+		Content:          content,
 		StructuredResult: payload,
 	}
 }

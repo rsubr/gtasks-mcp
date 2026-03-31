@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,13 +10,14 @@ import (
 
 	"gtasks-mcp/internal/logging"
 
-	gtasks "google.golang.org/api/tasks/v1"
 	"google.golang.org/api/option"
+	gtasks "google.golang.org/api/tasks/v1"
 )
 
 type Service struct {
 	svc        *gtasks.Service
 	taskListID string
+	initErr    error
 }
 
 func New(client *http.Client, listName string) (*Service, error) {
@@ -34,8 +36,28 @@ func New(client *http.Client, listName string) (*Service, error) {
 	return s, nil
 }
 
+func NewUnavailable(listName string, err error) *Service {
+	return &Service{
+		taskListID: listName,
+		initErr:    fmt.Errorf("google tasks service unavailable: %w", err),
+	}
+}
+
 func (s *Service) TaskListID() string {
 	return s.taskListID
+}
+
+func (s *Service) ensureReady() error {
+	if s == nil {
+		return errors.New("google tasks service unavailable")
+	}
+	if s.initErr != nil {
+		return s.initErr
+	}
+	if s.svc == nil {
+		return errors.New("google tasks service unavailable")
+	}
+	return nil
 }
 
 func (s *Service) ensureList(name string) (string, error) {
@@ -75,6 +97,9 @@ func retry(fn func() error) error {
 }
 
 func (s *Service) List() ([]Task, error) {
+	if err := s.ensureReady(); err != nil {
+		return nil, err
+	}
 	logging.Debug("listing tasks", "task_list_id", s.taskListID)
 	var res *gtasks.Tasks
 	err := retry(func() error {
@@ -95,6 +120,9 @@ func (s *Service) List() ([]Task, error) {
 }
 
 func (s *Service) Search(q string) ([]Task, error) {
+	if err := s.ensureReady(); err != nil {
+		return nil, err
+	}
 	logging.Debug("searching tasks", "task_list_id", s.taskListID, "query", q)
 	items, err := s.List()
 	if err != nil {
@@ -112,6 +140,9 @@ func (s *Service) Search(q string) ([]Task, error) {
 }
 
 func (s *Service) Create(title, notes, due, recurrence string) (Task, error) {
+	if err := s.ensureReady(); err != nil {
+		return Task{}, err
+	}
 	recurrence = normalizeRecurrence(recurrence)
 	if !validRecurrence(recurrence) {
 		return Task{}, fmt.Errorf("unsupported recurrence %q", recurrence)
@@ -135,6 +166,9 @@ func (s *Service) Create(title, notes, due, recurrence string) (Task, error) {
 }
 
 func (s *Service) Update(id string, title, notes, status, due, recurrence *string) (Task, error) {
+	if err := s.ensureReady(); err != nil {
+		return Task{}, err
+	}
 	logging.Info("updating task", "task_list_id", s.taskListID, "task_id", id, "status_supplied", status != nil, "due_supplied", due != nil, "recurrence_supplied", recurrence != nil)
 	existing, err := s.Get(id)
 	if err != nil {
@@ -175,7 +209,8 @@ func (s *Service) Update(id string, title, notes, status, due, recurrence *strin
 	var task *gtasks.Task
 	err = retry(func() error {
 		var err error
-		task, err = s.svc.Tasks.Update(s.taskListID, id, &gtasks.Task{
+		task, err = s.svc.Tasks.Patch(s.taskListID, id, &gtasks.Task{
+			Id:     id,
 			Title:  nextTitle,
 			Notes:  composeNotes(nextNotes, nextRecurrence),
 			Status: nextStatus,
@@ -198,6 +233,9 @@ func (s *Service) Update(id string, title, notes, status, due, recurrence *strin
 }
 
 func (s *Service) Delete(id string) error {
+	if err := s.ensureReady(); err != nil {
+		return err
+	}
 	logging.Info("deleting task", "task_list_id", s.taskListID, "task_id", id)
 	return retry(func() error {
 		return s.svc.Tasks.Delete(s.taskListID, id).Do()
@@ -205,6 +243,9 @@ func (s *Service) Delete(id string) error {
 }
 
 func (s *Service) Clear() error {
+	if err := s.ensureReady(); err != nil {
+		return err
+	}
 	logging.Info("clearing completed tasks", "task_list_id", s.taskListID)
 	return retry(func() error {
 		return s.svc.Tasks.Clear(s.taskListID).Do()
@@ -212,6 +253,9 @@ func (s *Service) Clear() error {
 }
 
 func (s *Service) Get(id string) (Task, error) {
+	if err := s.ensureReady(); err != nil {
+		return Task{}, err
+	}
 	logging.Debug("reading task", "task_list_id", s.taskListID, "task_id", id)
 	var t *gtasks.Task
 	err := retry(func() error {

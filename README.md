@@ -1,17 +1,17 @@
 # gtasks-mcp
 
-`gtasks-mcp` is an MCP server for Google Tasks. It exposes a small set of task-management tools over HTTP JSON-RPC and Server-Sent Events so an MCP client can list, read, search, create, update, delete, and clear tasks in a configured Google Tasks list.
+`gtasks-mcp` is an MCP server for Google Tasks. It exposes a small set of task-management tools over a single MCP HTTP endpoint so an MCP client can list, read, search, create, update, delete, and clear tasks in a configured Google Tasks list.
 
 The server is built in Go and uses OAuth against the Google Tasks API. It also exposes tasks as MCP resources using `gtasks:///TASK_ID` URIs.
 
 ## What It Does
 
-- Connects to Google Tasks using OAuth credentials from `gcp-oauth.keys.json`
+- Connects to Google Tasks using a configurable OAuth credentials JSON file
 - Persists the OAuth access token in `token.json` by default
 - Targets one Google Tasks list, creating it if needed
 - Exposes MCP tools for task CRUD operations
 - Exposes MCP resources for listing and reading individual tasks
-- Broadcasts simple task change events over SSE
+- Broadcasts task change notifications over MCP SSE streams
 
 ## Exposed MCP Tools
 
@@ -35,27 +35,42 @@ Tasks are also exposed as MCP resources.
 
 ## Transport and Endpoints
 
-The server listens over HTTP and registers three endpoints:
+The server listens over HTTP and exposes:
 
-- `/rpc`: MCP JSON-RPC endpoint
-- `/events`: SSE endpoint for simple task change notifications
+- `/mcp`: the single MCP endpoint
 - `/manifest`: lightweight manifest describing the server and tool schemas
+
+The `/mcp` endpoint supports:
+
+- `POST /mcp`: JSON-RPC requests
+- `GET /mcp`: Server-Sent Events stream for MCP notifications
+- `DELETE /mcp`: terminate an MCP session
+
+The old split endpoints `/rpc` and `/events` are no longer used.
 
 ## Authentication and Setup
 
-The server expects a Google OAuth client credentials file named `gcp-oauth.keys.json` in the project root. On first run, if the token file does not exist, it starts an interactive OAuth flow and writes the resulting token to disk.
+The server expects a Google OAuth client credentials JSON file. On first run, if the token file does not exist, it starts an interactive OAuth flow and writes the resulting token to disk.
 
 Files used by the server:
 
 - `gcp-oauth.keys.json`: Google OAuth client credentials
 - `token.json`: stored OAuth token by default
 
+Credential file resolution order:
+
+1. `-credentials-file`
+2. `GOOGLE_OAUTH_CREDENTIALS_FILE`
+3. `/auth/gcp-oauth.keys.json`
+4. `./gcp-oauth.keys.json`
+
 To prepare Google API access:
 
 1. Create a Google Cloud project and enable the Google Tasks API.
 2. Create an OAuth client credential JSON file.
-3. Save that file as `gcp-oauth.keys.json` in the repository root.
-4. Start the server and complete the interactive OAuth flow when prompted.
+3. Save that file as `gcp-oauth.keys.json`.
+4. Place it either at `/auth/gcp-oauth.keys.json` for container use or `./gcp-oauth.keys.json` for local repo-root use, or pass an explicit path.
+5. Start the server and complete the interactive OAuth flow when prompted.
 
 ## Configuration
 
@@ -63,6 +78,7 @@ Startup options are available via flags, with environment-variable fallbacks for
 
 Flags:
 
+- `-credentials-file`: OAuth client credentials JSON file path
 - `-token-file`: OAuth token file path, default `token.json`
 - `-tasklist`: Google Tasks list name
 - `-log-level`: `debug`, `info`, `warn`, or `error`
@@ -71,6 +87,7 @@ Flags:
 
 Environment variables:
 
+- `GOOGLE_OAUTH_CREDENTIALS_FILE`: default OAuth client credentials file path when `-credentials-file` is not passed
 - `TASKLIST_NAME`: default task list name when `-tasklist` is not passed
 - `LOG_LEVEL`: default log level when `-log-level` is not passed
 - `LISTEN_ADDR`: default listen address when `-listen-addr` is not passed
@@ -90,11 +107,11 @@ Build with the provided script:
 ./build.sh
 ```
 
-That script runs:
+That script runs `go mod tidy` and builds static Linux binaries for:
 
 ```bash
-go mod tidy
-go build -o gtasks-mcp -ldflags="-s -w" ./cmd/server
+dist/gtasks-mcp-linux-amd64
+dist/gtasks-mcp-linux-arm64
 ```
 
 To build manually:
@@ -120,12 +137,91 @@ go run ./cmd/server -tasklist "My Tasks" -port 8080
 Example using environment variables:
 
 ```bash
-TASKLIST_NAME="My Tasks" LOG_LEVEL=debug PORT=8080 ./gtasks-mcp
+GOOGLE_OAUTH_CREDENTIALS_FILE="/auth/gcp-oauth.keys.json" TASKLIST_NAME="My Tasks" LOG_LEVEL=debug PORT=8080 ./gtasks-mcp
 ```
+
+## Configure In Clients
+
+If you host the server remotely, point your MCP client at the `/mcp` endpoint. For the examples below, the hosted endpoint is:
+
+```text
+https://gtasks-mcp.rsubr.in/mcp
+```
+
+### Claude Code
+
+Add the server from the CLI:
+
+```bash
+claude mcp add --transport http gtasks https://gtasks-mcp.rsubr.in/mcp
+```
+
+Or add it as JSON configuration:
+
+```json
+{
+  "mcpServers": {
+    "gtasks": {
+      "type": "http",
+      "url": "https://gtasks-mcp.rsubr.in/mcp"
+    }
+  }
+}
+```
+
+### Codex
+
+Add the server from the CLI:
+
+```bash
+codex mcp add gtasks --url https://gtasks-mcp.rsubr.in/mcp
+```
+
+Or add it directly to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.gtasks]
+url = "https://gtasks-mcp.rsubr.in/mcp"
+```
+
+### Gemini CLI
+
+Add the server from the CLI:
+
+```bash
+gemini mcp add --transport http gtasks https://gtasks-mcp.rsubr.in/mcp
+```
+
+Or add it to `~/.gemini/settings.json` or `.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "gtasks": {
+      "httpUrl": "https://gtasks-mcp.rsubr.in/mcp",
+      "timeout": 30000
+    }
+  }
+}
+```
+
+After configuring the server, verify it from the client:
+
+- Claude Code: `claude mcp list`
+- Codex: `codex mcp list`
+- Gemini CLI: `gemini mcp list`
 
 ## Example MCP Usage
 
-Once the server is running, MCP clients should initialize against the `/rpc` endpoint.
+Once the server is running, MCP clients should connect to the `/mcp` endpoint.
+
+Typical MCP transport flow:
+
+1. `POST /mcp` with `initialize`
+2. Read `MCP-Session-Id` from the response headers
+3. Reuse that session ID on subsequent `POST /mcp` requests
+4. Optionally open `GET /mcp` with the same `MCP-Session-Id` to receive SSE notifications
+5. `DELETE /mcp` with that session ID to close the session when done
 
 Example tool calls:
 

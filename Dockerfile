@@ -1,17 +1,12 @@
-FROM golang:1.26.1 AS builder
+FROM gcr.io/distroless/static-debian13
 
-WORKDIR /src
-
-COPY . .
-RUN go mod download
-RUN go build -ldflags="-s -w" -o /out/gtasks-mcp ./cmd/server
-
-FROM gcr.io/distroless/static-debian13:nonroot
+ARG TARGETARCH
 
 WORKDIR /auth
-COPY --from=builder /out/gtasks-mcp /usr/local/bin/gtasks-mcp
+COPY --chown=www-data:www-data --chmod=0755 dist/gtasks-mcp-linux-${TARGETARCH} /usr/local/bin/gtasks-mcp
 
-VOLUME ["/auth"]
+USER www-data:www-data
+
 EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/gtasks-mcp"]
